@@ -5,6 +5,7 @@ import re
 import operator
 import unicodedata
 import sys  
+import os.path
 
 reload(sys)  
 sys.setdefaultencoding('latin-1')
@@ -52,6 +53,17 @@ def getKeys(dict):
 
     # print keys
     return keys
+
+
+def writeToFile( filename, line ):
+
+    if os.path.isfile(filename):
+        f = open( filename, 'a' )
+    else:
+        f = open( filename, 'w' )
+    line = line + '\n'
+    f.write(line)
+    f.close()
 
 
 
@@ -142,6 +154,14 @@ def mostActiveUsers( top ):
 
     mostFirst = sorted(dict.items(), key=operator.itemgetter(1), reverse=True)
 
+    print 'The most '+ repr(top) +' active users are: '
+    print mostFirst[:top]
+    print ' '
+
+    writeToFile('MostActiveUsers.txt', 'The most '+ repr(top) +' active users are: \n')
+    writeToFile('MostActiveUsers.txt', repr(mostFirst[:top]) + '\n' )
+    writeToFile('MostActiveUsers.txt', '------ \n' )
+
     return mostFirst[:top]
 
 # Get a dictionary with the most active categories (category and total posts)
@@ -171,6 +191,10 @@ def mostActiveCategories( top ):
     print mostFirst[:top]
     print ' '
 
+    writeToFile('MostActiveCategories.txt', 'The most '+ repr(top) +' active categories are: \n')
+    writeToFile('MostActiveCategories.txt', repr(mostFirst[:top]) + '\n' )
+    writeToFile('MostActiveCategories.txt', '------ \n' )
+
     return mostFirst[:top]
 
 # Get a dictionary with the most active topics (topic and total posts)
@@ -198,6 +222,10 @@ def mostActiveTopics( top ):
     print mostFirst[:top]
     print ' '
 
+    writeToFile('MostActiveTopics.txt', 'The most '+ repr(top) +' active topics are: \n')
+    writeToFile('MostActiveTopics.txt', repr(mostFirst[:top]) + '\n' )
+    writeToFile('MostActiveTopics.txt', '------ \n' )
+
     return mostFirst[:top]
 
 
@@ -205,9 +233,9 @@ def mostActiveTopics( top ):
 
 
 
-# Get a dictionary with posts per year (year and total posts)
+# Get a dictionary with posts per year
 # 
-def getContentsByYear( mostPosts = False ):
+def getContentsByYear():
     dict = {}
     with open(entities) as f:
         for line in f:
@@ -220,16 +248,7 @@ def getContentsByYear( mostPosts = False ):
             dict[year]['total'] += 1
             dict[year]['contents'].append( basicCleanUp( entity['stormfront_content'] ) )
 
-    # print dict
-
-    if mostPosts:
-        # print sorted(dict.items(), key=operator.itemgetter(1), reverse=True)
-        # return sorted(dict.items(), key=operator.itemgetter(1), reverse=True)
-        return dict
-    else:
-        # print sorted(dict.items(), key=operator.itemgetter(0))
-        # return sorted(dict.items(), key=operator.itemgetter(0))
-        return dict
+    return dict
    
 # Get contents from a given list of categories
 # 
@@ -248,7 +267,7 @@ def getContentByCategory( categories ):
     
     return content
 
-# Seasons-criminality and extreme content
+# Get contents per Quarter or Season
 # 
 def getContentsByQuarter( season = False ):
     Q1 = []
@@ -311,13 +330,37 @@ def getContentsByTopic( topics ):
     print ' '
     return dict
 
+# Get contents from a given list of users
+# 
+def getContentsByUser( users ):
+    dict = {}
+    keysUsers = []
+    
+    for key, value in users:
+        keysUsers.append(key)
+
+    with open(entities) as f:
+        for line in f:
+            entity = json.loads(line)
+            content = basicCleanUp(entity['stormfront_content'])
+            if entity['stormfront_user'] in keysUsers:
+                if not entity['stormfront_user'] in dict:
+                    dict[entity['stormfront_user']] = []
+                dict[entity['stormfront_user']].append( content )
+
+    print 'The contents of the most popular users are:'
+    print dict
+    print ' '
+    return dict
+
 
 
 
 
 # Analyze a dictionary
+# if you are providing a list instead of a dictionary use isContent = True and give Dataset name
 # 
-def getSentimentsFromDict( dict, isContent = False ):
+def getSentimentsFromDict( dict, isContent = False, filename = False, datasetName = '' ):
 
     analyzer = SentimentIntensityAnalyzer()
     allPositives = []
@@ -341,17 +384,21 @@ def getSentimentsFromDict( dict, isContent = False ):
                     neutral.append(vs['neu'])
                     compound.append(vs['compound'])
 
-            print 'The positive average is: ' + repr( py_.mean(positives) )
-            print 'The negative average is: ' + repr( py_.mean(negatives) )
-            print 'The neutral average is: ' + repr( py_.mean(neutral) )
-            print 'The compound average is: ' + repr( py_.mean(compound) )
-            print 'The total sentences are: ' + repr( len(dict) )
+            print 'The positive average in ' + datasetName +' is: ' + repr( py_.mean(positives) )
+            print 'The negative average in ' + datasetName +' is: ' + repr( py_.mean(negatives) )
+            print 'The neutral average in ' + datasetName +' is: ' + repr( py_.mean(neutral) )
+            print 'The compound average in ' + datasetName +' is: ' + repr( py_.mean(compound) )
+            print 'The total posts are: ' + repr( len(dict) )
             print '---------'
 
-            allPositives.append( py_.mean(positives) )
-            allNegatives.append( py_.mean(negatives) )
-            allNeutral.append( py_.mean(neutral) )
-            allCompound.append( py_.mean(compound) )
+            if filename:
+                writeToFile( filename, 'The positive average in ' + datasetName +' is: ' + repr( py_.mean(positives) ) )
+                writeToFile( filename, 'The negative average in ' + datasetName +' is: ' + repr( py_.mean(negatives) ) )
+                writeToFile( filename, 'The neutral average in ' + datasetName +' is: ' + repr( py_.mean(neutral) ) )
+                writeToFile( filename, 'The compound average in ' + datasetName +' is: ' + repr( py_.mean(compound) ) )
+                writeToFile( filename, 'The total posts are: ' + repr( len(dict) ) )
+                writeToFile( filename, '---------' )
+
         else:
             for category, sentences in dict.iteritems():
 
@@ -372,8 +419,16 @@ def getSentimentsFromDict( dict, isContent = False ):
                 print 'The negative average in ' + category +' is: ' + repr( py_.mean(negatives) )
                 print 'The neutral average in ' + category +' is: ' + repr( py_.mean(neutral) )
                 print 'The compound average in ' + category +' is: ' + repr( py_.mean(compound) )
-                print 'The total sentences are: ' + repr( len(sentences) )
+                print 'The total posts are: ' + repr( len(sentences) )
                 print '---------'
+
+                if filename:
+                    writeToFile( filename, 'The positive average is: ' + repr( py_.mean(positives) )   )
+                    writeToFile( filename, 'The negative average is: ' + repr( py_.mean(negatives) )   )
+                    writeToFile( filename, 'The neutral average is: ' + repr( py_.mean(neutral) )   )
+                    writeToFile( filename, 'The compound average is: ' + repr( py_.mean(compound) )   )
+                    writeToFile( filename, 'The total posts are: ' + repr( len(sentences) )   )
+                    writeToFile( filename, '---------'   )
 
                 allPositives.append( py_.mean(positives) )
                 allNegatives.append( py_.mean(negatives) )
@@ -384,7 +439,18 @@ def getSentimentsFromDict( dict, isContent = False ):
             print 'The aggregated negative average is: ' + repr( py_.mean(allNegatives) )
             print 'The aggregated neutral average is: ' + repr( py_.mean(allNeutral) )
             print 'The aggregated compound average is: ' + repr( py_.mean(allCompound) )
+            print 'The total aggregated posts are: ' + repr(len(sentences))
             print '---------'
+            
+            if filename:
+                writeToFile( filename, 'The aggregated positive average is: ' + repr( py_.mean(allPositives) )  )
+                writeToFile( filename, 'The aggregated negative average is: ' + repr( py_.mean(allNegatives) )  )
+                writeToFile( filename, 'The aggregated neutral average is: ' + repr( py_.mean(allNeutral) )  )
+                writeToFile( filename, 'The aggregated compound average is: ' + repr( py_.mean(allCompound) )  )
+                writeToFile( filename, 'The total aggregated posts are: '  + repr( len(sentences) )  )
+                writeToFile( filename, '---------'  )
+
+
 
 # 
 # 
@@ -395,33 +461,37 @@ def getSentimentsFromDict( dict, isContent = False ):
 
 
 # allContent = getContentByCategory( categoriesList )
-# populationContent = getContentByCategory( population )
-# politicalRegimesContent = getContentByCategory( politicalRegimes )
+#populationContent = getContentByCategory( population )
+politicalRegimesContent = getContentByCategory( politicalRegimes )
+#ladies = getContentByCategory(['For Stormfront Ladies Only'])
 
-
-# seasons = getContentsByQuarter(season = True)
-# getSentimentsFromDict(seasons)
-# quarters = getContentsByQuarter()
-# getSentimentsFromDict(quarters)
+#seasons = getContentsByQuarter(season = True)
+#getSentimentsFromDict(seasons)
+#quarters = getContentsByQuarter()
+#getSentimentsFromDict(quarters)
 # print quarters
 
 
 # getSentimentsFromDict(allContent)
-# getSentimentsFromDict(populationContent)
-# getSentimentsFromDict(politicalRegimesContent)
-# yolo = mostActiveUsers(25)
-# print yolo
+# getSentimentsFromDict(populationContent, False, 'SentimentGeneralPopulation.txt'  )
+#getSentimentsFromDict(ladies, False, 'SentimentLadies.txt'  )
+#getSentimentsFromDict(politicalRegimesContent)
+#getSentimentsFromDict( getContentsByUser( mostActiveUsers(25) ), False, 'SentimentMostActiveUsers.txt'  )
+getSentimentsFromDict( politicalRegimesContent, False, 'SentimentCountries.txt'  )
+#getSentimentsFromDict( quarters, False, 'SentimentSeason.txt' )
+# getContentsByUser( mostActiveUsers(25) )
 # mostActiveCategories(14)
-# mat = mostActiveTopics(12)
+#mat = mostActiveTopics(5)
 # getContentsByTopic(mat)
 # getSentimentsFromDict(getContentsByTopic(mat))
 # getTopicsFromUsersInfo()
 # print lala
 
-yearlyActivity = getContentsByYear()
-for year in getContentsByYear():
-    print 'The ' + year + ' sentiments are:'
-    getSentimentsFromDict( yearlyActivity[year]['contents'], isContent = True )
+# yearlyActivity = getContentsByYear()
+# for year in getContentsByYear():
+#     print 'The ' + year + ' sentiments are:'
+#     writeToFile('yearly.txt', 'The ' + year + ' sentiments are:')
+#     getSentimentsFromDict( yearlyActivity[year]['contents'], isContent = True, filename = 'yearly.txt' )
 
 # usersUniqueCategories = getCategoriesFromUsersInfo()
 # print usersUniqueCategories
@@ -430,6 +500,3 @@ for year in getContentsByYear():
 # print entitiesUniqueCategories
 # getCategoriesFromEntities()
 # getTopicsFromEntities()
-
-
-
