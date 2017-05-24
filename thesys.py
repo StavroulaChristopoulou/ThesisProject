@@ -7,12 +7,9 @@ import unicodedata
 import sys  
 import os.path
 import nltk
+
+# For word count
 from nltk.tokenize import word_tokenize, wordpunct_tokenize, sent_tokenize
-from nltk.stem import WordNetLemmatizer
-from nltk.stem.porter import PorterStemmer
-from nltk.corpus import treebank
-from nltk.corpus import wordnet
-from nltk.corpus import sentiwordnet as swn
 from nltk.corpus import stopwords
 
 reload(sys)  
@@ -22,6 +19,8 @@ sys.setdefaultencoding('latin-1')
 # Files
 entities = '/var/scratch/schristo/data/201607_vox-pol_jonathan/stormfront_replies_entities.jsons'
 usersInfo = '/var/scratch/schristo/data/201607_vox-pol_jonathan/stormfront_users_info_v2.jsons'
+entities = '100sample.jsons'
+usersInfo = 'users_info_v2.jsons'
 
 
 
@@ -30,159 +29,38 @@ punchMarks = [".", ",", "''", "``", "...", ":", "(", ")", "{", "}", "[", "]"]
 categoriesList = ['New Members Introduce Yourselves', 'Events', 'For Stormfront Ladies Only', 'Politics & Continuing Crises', 'Questions about this Board', 'Stormfront Baltic / Scandinavia', 'Stormfront Britain', 'Stormfront Canada', 'Stormfront Croatia', 'Stormfront Downunder', 'Stormfront Europe', 'Stormfront Hungary', 'Stormfront Ireland', 'Stormfront Italia', 'Stormfront Nederland & Vlaanderen', 'Stormfront Russia', 'Stormfront South Africa', 'Stormfront Srbija', 'Strategy and Tactics']
 population = ['Politics & Continuing Crises','Lounge', 'Strategy and Tactics' ]
 politicalRegimes = ['Stormfront Canada','Stormfront Britain', 'Stormfront South Africa','Stormfront Italia', 'Stormfront Russia' ]
-
-
-wordnet_lemmatizer = WordNetLemmatizer()
-porter_stemmer = PorterStemmer()
 stopWords = set(stopwords.words('english'))
+
+
 
 # Functions START -----
 # 
 # 
 
-# TOKENIZE
-# 
 
-
-
-def tokenizeSentences( posts ):
-    print 'Starting: tokenizeSentences()'
-    # returns => [[post[sentence1], [sentence2]],[post[sencetece1]],[]]
-    tokenizedPosts = []
-    for post in posts:
-        sentenceTokenized = sent_tokenize(post)
-        taggedPost = []
-        for st in sentenceTokenized:
-            stemWords = []
-            st = st.lower()
-            tok = word_tokenize(st)
-            for word in tok:
-                if not is_stopword(word):
-                    if not is_punctuation(word):
-                        stemWords.append( wordnet_lemmatizer.lemmatize(word) )
-            tagged = nltk.pos_tag(stemWords)
-            taggedPost.append( tagged )
-        tokenizedPosts.append(taggedPost)
-    print 'Finished /////////////'
-    # print tokenizedPosts
-    return tokenizedPosts
-
-# tokens = tokenizeSentences( ["Hello from the other sides. ;) I'm happy to be beloved you tonight!"] )
-
-
-# mySentences = ["""Youth for Western Civilization sounds interesting; I'll look into that when I have time. Thanks for that. When I went to college it was the usual story: lots of anti-white propaganda, lets persecute dead white males, "white people have no culture" (actually heard a Prof say this  and I did call her out on it ). It's disheartening to see sheltered, young white kids buy into that crap and deny all of the great things that Western Civilization has given the world. Especially now that the civilization our ancestors fought for and built is being destroyed in Europe and the U.S. So, yeah it's really good to hear about YWC. I still believe it's (our race, culture and civilization) worth fighting for and am very grateful to keep finding other people that don't buy into the commie driven/anti-white/nwo narrative. Its good to see this.""", """Another one""", """Hello World!"""]
-
-# st = tokenizeSentences(mySentences)
-# print len(st)
-# sentenceTokenized = sent_tokenize(mySentences)
-# for st in sentenceTokenized:
-#     wordTokenized = word_tokenize(st)
-
-#     print nltk.pos_tag(wordTokenized)
-#     print wordTokenized
-    # print len(sentenceTokenized)
-
-# yollllo = wordpunct_tokenize(mySentences)
-
-# print wordTokenized
-# print yollllo
-
-
-
-# for token in tokens:
-#     print wordnet_lemmatizer.lemmatize(token)
-#     print porter_stemmer.stem(token)
-
-
-#evita"
-# syns = wordnet.synsets("program")
-# print (syns[0].lemmas())
-
-
-# happy = swn.senti_synsets('happy', 'a')
-# happy0 = list(happy)[0]
-#   happy0.pos_score()
-#     0.875
-#   happy0.neg_score()
-#     0.0
-#   happy0.obj_score()
-#     0.125
-
-
-
-def sentiWord( tokenizedPosts ):
-    print 'STARTING: sentiWord()'
-    for tpost in tokenizedPosts:
-        for sentence in tpost:
-            pscore = 0.0
-            nscore = 0.0
-            for i in range(0,len(sentence)):
-                word = sentence[i][0]
-                tag = sentence[i][1]
-                print word + '  ' + tag
-                if 'NN' in tag and len(swn.senti_synsets(word,'n')) > 0:
-                    print 'this is NN: ' + word
-                    pscore+=(list(swn.senti_synsets(word,'n'))[0]).pos_score()
-                    nscore+=(list(swn.senti_synsets(word,'n'))[0]).neg_score()
-                elif 'VB' in tag and len(swn.senti_synsets(word,'v')) > 0:
-                    print 'this is VB: ' + word
-                    pscore+=(list(swn.senti_synsets(word,'v'))[0]).pos_score()
-                    nscore+=(list(swn.senti_synsets(word,'v'))[0]).neg_score()
-                elif 'JJ' in tag and len(swn.senti_synsets(word,'a')) > 0:
-                    print 'this is JJ: ' + word
-                    pscore+=(list(swn.senti_synsets(word,'a'))[0]).pos_score()
-                    nscore+=(list(swn.senti_synsets(word,'a'))[0]).neg_score()
-                elif 'RB' in tag and len(swn.senti_synsets(word,'r')) > 0:
-                    print 'this is RB: ' + word
-                    pscore+=(list(swn.senti_synsets(word,'r'))[0]).pos_score()
-                    nscore+=(list(swn.senti_synsets(word,'r'))[0]).neg_score()
-                else:
-                    print 'Not one of the above: ' + word + ' ' + tag
-
-                print 'Positive: ' + repr(pscore)
-                print 'Negative: ' + repr(nscore)
-
-    print 'Finished /////////////'
-
-
-
-def is_stopword(string):
-    if string.lower() in nltk.corpus.stopwords.words('english'):
-        return True
-    else:
-        return False
-
-def is_punctuation(string):
-    for char in string:
-        if char.isalpha() or char.isdigit():
-            return False
-    return True
-
-
-# Word Count
+# Word Count from a given dictionary without the stop-words
 # 
 def wordCount( posts ):
     
     postsDict = {}
-    stems = []
+    words = []
 
     for key, posts in posts.iteritems():
         for post in posts:
             tokens = word_tokenize(post)
             for token in tokens:
-                stems.append(porter_stemmer.stem(token))
+                words.append(token)
 
-    uniqueStems = set(stems);
+    uniqueWords = set(words);
 
-    for stem in uniqueStems:
-        if not stem in stopWords:
-            if not stem in punchMarks:
-                postsDict[stem] = stems.count(stem)
+    for word in uniqueWords:
+        if not word in stopWords:
+            if not word in punchMarks:
+                postsDict[word] = words.count(word)
 
     print sorted(postsDict.items(), key=operator.itemgetter(1))
 
     return postsDict
-
 
 # Clean up how it looks premium stage
 # 
@@ -215,7 +93,8 @@ def getKeys(dict):
     # print keys
     return keys
 
-
+# Write the given text line to the given file
+# 
 def writeToFile( filename, line ):
 
     if os.path.isfile(filename):
@@ -293,10 +172,6 @@ def getTopicsFromEntities():
     print topics
     print ' '
     return topics
-
-# def getTopicsPerCategory():
-    # {'category': {'Topic': 34}, {'Topic2': 24}}
-
 
 
 
@@ -388,8 +263,6 @@ def mostActiveTopics( top ):
     writeToFile('MostActiveTopics.txt', '------ \n' )
 
     return mostFirst[:top]
-
-
 
 
 
@@ -633,10 +506,6 @@ def getSentimentsFromDict( dict, isContent = False, filename = False, datasetNam
 
 
 seasons = getContentsByQuarter(season = True, sample=True)
-for season, contents in seasons.iteritems(): 
-    st = tokenizeSentences(contents)
-    sentiWord(st)
-    # print len(st)
 
 # print seasons
 # getSentimentsFromDict(seasons)
@@ -657,7 +526,7 @@ for season, contents in seasons.iteritems():
 # getTopicsFromUsersInfo()
 # print lala
 
-# wordCount( seasons )
+wordCount( seasons )
 
 # yearlyActivity = getContentsByYear()
 # for year in getContentsByYear():
