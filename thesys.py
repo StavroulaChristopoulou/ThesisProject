@@ -19,10 +19,6 @@ sys.setdefaultencoding('latin-1')
 # Files
 entities = '/var/scratch/schristo/data/201607_vox-pol_jonathan/stormfront_replies_entities.jsons'
 usersInfo = '/var/scratch/schristo/data/201607_vox-pol_jonathan/stormfront_users_info_v2.jsons'
-entities = '100sample.jsons'
-usersInfo = 'users_info_v2.jsons'
-
-
 
 # Constants
 punchMarks = [".", ",", "''", "``", "...", ":", "(", ")", "{", "}", "[", "]"]
