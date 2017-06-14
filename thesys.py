@@ -1,3 +1,4 @@
+from __future__ import division, unicode_literals
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import json
 from itertools import islice
@@ -10,10 +11,12 @@ import pprint
 import os.path
 import nltk
 import ast
-from wordcloud import WordCloud
+from wordcloud import WordCloud, STOPWORDS
 import matplotlib.pyplot as plt
 import numpy as np
-
+import random
+import math
+from textblob import TextBlob as tb
 
 # For word count
 from nltk.tokenize import word_tokenize, wordpunct_tokenize, sent_tokenize
@@ -22,7 +25,7 @@ from nltk.corpus import stopwords
 # Set the character encoding
 # latin-1 seems to be the only working properly since posts are going back all the way in 2001
 #
-reload(sys)  
+reload(sys)
 sys.setdefaultencoding('latin-1')
 
 
@@ -32,15 +35,28 @@ entities = '/var/scratch/schristo/data/201607_vox-pol_jonathan/stormfront_replie
 userPosts = 'results/AllUsers.txt'
 userContents = 'results/userContentData.json'
 timelineData = 'results/timelineData.json'
+timelineContents = 'results/timelineContents.json'
 sentiRange = 'results/SentimentsFromRange.json'
-
+sentiUsers = 'results/SentimentsFromAllUsers.json'
 # Import word counts
 wcLadies = 'results/For_Stormfront_Ladies_Only-WordCount.json'
+allCategoriesSentiments = 'results/SentimentsFor-39-MostActiveCategories.json'
+
+wcCat = ['500-MostCommonWords.json', 'Announcements-WordCount.json', 'Classified_Ads-WordCount.json', 'Dating_Advice-WordCount.json', 'eActivism_and_Stormfront_Webmasters-WordCount.json', 'Fourth_Annual_Stormfront_Smoky_Mountain__Summit-WordCount.json', 'General_Questions_and_Comments-WordCount.json', 'Guidelines_for_Posting-WordCount.json', 'Ideology_and_Philosophy-WordCount.json', 'Introduction_and_FAQ-WordCount.json', 'Legal_Issues-WordCount.json', 'Multimedia-WordCount.json', 'New_Members_Introduce_Yourselves-WordCount.json', 'Newslinks_&_Articles-WordCount.json', 'The_Eternal_Flame-WordCount.json', 'The_Truth_About_Martin_Luther_King-WordCount.json']
+wcLadiesCat = ['For_Stormfront_Ladies_Only-WordCount.json']
+
+
+
 
 
 # Constants
 punchMarks = [".", ",", "''", "``", "...", ":", "(", ")", "{", "}", "[", "]", "?"]
 stopWords = set(stopwords.words('english'))
+
+
+stop = set(STOPWORDS)
+stop.add("int")
+stop.add("ext")
 
 # population = ['Politics & Continuing Crises', 'Lounge', 'Strategy and Tactics' ]
 # politicalRegimes = ['Stormfront Canada','Stormfront Britain', 'Stormfront South Africa','Stormfront Italia', 'Stormfront Russia' ]
@@ -55,6 +71,48 @@ wcc = [('For Stormfront Ladies Only', 353), ('Guidelines for Posting', 123), ('G
 # Functions START -----
 # 
 # 
+
+
+# TF-IDF
+# 
+def tf(word, blob):
+    return blob.words.count(word) / len(blob.words)
+
+def n_containing(word, bloblist):
+    return sum(1 for blob in bloblist if word in blob.words)
+
+def idf(word, bloblist):
+    return math.log(len(bloblist) / (1 + n_containing(word, bloblist)))
+
+def tfidf(word, blob, bloblist):
+    return tf(word, blob) * idf(word, bloblist)
+
+def doTFIDF():
+    print 'Starting doTFIDF'
+    dict = {}
+    txt = ''
+    with open(timelineContents) as f:
+        for line in f:
+            data = json.loads(line)
+            for year, values in data.iteritems():
+                for month, contents in data[year].iteritems():
+                    title = "Top words in " + year + "-" + month
+                    writeToFile( 'TfIdf.txt', title)
+                    print("Top words in " + year+ "-" + month)
+                    for content in contents:
+                        txt = content + ' '
+                    blob = tb(txt)
+                    bloblist = [blob]
+                    scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+                    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                    for word, score in sorted_words[:50]:
+                        word = "\tWord: {}, TF-IDF: {}".format(word, round(score, 5))
+                        writeToFile( 'TfIdf.txt', word)
+                        print("\tWord: {}, TF-IDF: {}".format(word, round(score, 5)))
+
+    print 'Finished...'
+
+
 
 # Word Count from a given dictionary without the stop-words
 # 
@@ -851,15 +909,67 @@ def getTimelineData():
     # return dict
 
 
+def getTimelineContents():
+    print 'Starting: getTimelineContents'
+
+    dict = {}
+
+    with open(entities) as f:
+        
+        for line in f:
+            entity = json.loads(line)
+            year = entity['stormfront_publication_date'].split('-')[0]
+            month = entity['stormfront_publication_date'].split('-')[1]
+            user = entity['stormfront_user']
+            topic = entity['stormfront_topic']
+            category = entity['stormfront_category']
+            content = basicCleanUp( entity['stormfront_content'] )
+
+            if not year in dict:
+                dict[year] = {}
+
+            if month not in dict[year]:
+                dict[year][month] = []
+
+            if content:
+                dict[year][month].append( content )
+
+    print 'Finished...'
+
+
+    with open('results/timelineContents.json', 'w') as outfile:
+        json.dump(dict, outfile)
+
+    print dict
+    # return dict
+
+
 
 def makeWordCloud( data = False, include = False, exclude = False, filename = False ):
     print 'Starting: makeWordCloud'
+    stopwords = STOPWORDS
+    stopwords.add(repr("n't"))
+    stopwords.add(repr("'d"))
+    stopwords.add(repr("'s"))
+    stopwords.add(repr("'m"))
+    stopwords.add(repr("'ve"))
+    stopwords.add(repr("'re"))
+    stopwords.add(repr("'"))
+    stopwords.add(repr("&"))
+    stopwords.add(repr("|"))
+    stopwords.add(repr("#"))
+    stopwords.add(repr(";"))
+    stopwords.add(repr("+"))
+    stopwords.add(repr("http"))
+
     txt = ''
 
     if data:
         for word, times in data.iteritems():
-            for i in range(times):
-                txt += word + ' '
+            if word not in stopWords:
+                times = int(times / 50)
+                for i in range(times):
+                    txt += unicodedata.normalize('NFKD', word).encode('ascii','ignore') + ' '
     else:
         with open(entities) as f:
             for line in f:
@@ -875,8 +985,8 @@ def makeWordCloud( data = False, include = False, exclude = False, filename = Fa
                     txt += basicCleanUp(entity['stormfront_content'])
                     txt += ' '
 
-
-    wc = WordCloud().generate(txt)
+    print 'Starting: WordCloud'
+    wc = WordCloud(max_words=100, stopwords=stopwords ).generate(txt)
     if filename:
         wc.to_file(filename)
     else:
@@ -976,15 +1086,22 @@ def doPlotFromTimeline():
         dates.append( int(date) )
         sents.append( float(sent) )
 
-    createCoRelPlot( dates, sents, filename = 'sentiTime.jpg', xlabel = 'Time from 2001-09 to 2015-02', ylabel = 'Compound Sentiments', step = 3.0 )
+    print np.corrcoef( dates, sents )
+    # createCoRelPlot( dates, sents, filename = 'sentiTime.jpg', xlabel = 'Time from 2001-09 to 2015-02', ylabel = 'Compound Sentiments', step = 3.0 )
 
 def doPlotFromUsersRange():
     dict = { 'lowest':{ 'postCount': 0, 'compound': '' }, 'low':{ 'postCount': 0, 'compound': '' }, 'medium':{ 'postCount': 0, 'compound': '' }, 'high':{ 'postCount': 0, 'compound': '' }, 'highest':{ 'postCount': 0, 'compound': '' } }
+
+    userDict = {}
 
     with open(userContents) as f:
         for line in f:
             loadedUsers = json.loads(line)
             for key, posts in loadedUsers.iteritems():
+                if not key in userDict:
+                    userDict[key] = {}
+                userDict[key]['totalPosts'] = len(posts)
+
                 postsPerUser = len(loadedUsers[key])
                 if postsPerUser <= 1:
                     dict['lowest']['postCount'] += len(posts)
@@ -997,50 +1114,44 @@ def doPlotFromUsersRange():
                 else:
                     dict['highest']['postCount'] += len(posts)
 
-    print dict
 
-    with open(sentiRange) as f:
+    # print dict
+
+    with open(sentiUsers) as f:
         for line in f:
             data = json.loads(line)
-            for rng, values in data.iteritems():
-                if data[rng]:
-                    print data[rng]
-                    compound = data[rng]['compound']
-                    dict[rng]['compound'] = compound
+            for user, values in data.iteritems():
+                if values:
+                    userDict[user]['compound'] = values['compound']
 
+    # print userDict
 
-    print dict
+    # print dict
 
     # dict = sorted(dict.items(), key=operator.itemgetter(0), reverse=False)
 
-    postCount = []
-    sents = []
+    userPostsList = []
+    sentiUsersList = []
 
-    # for score, values in dict:
-    #     if key != 'total':
-    #         for key in dict[score]:
-    #             print key
-    #             postCount.append( int(dict[score]['postCount']) )
-    #             sents.append( float(dict[score]['compound']) )
+    for user, values in userDict.iteritems():
+        print user
+        print values
+        if values['totalPosts'] != 0:
+            userPostsList.append( values['totalPosts'] )
+            sentiUsersList.append( values['compound'] )
 
+    print np.corrcoef( userPostsList, sentiUsersList )
 
-# 'lowest': {'postCount': 19346, 'compound': 0.16979695027395791},
-# 'high': {'postCount': 313159, 'compound': 0.035213245028882706},
-# 'highest': {'postCount': 263467, 'compound': -0.030325970614915106},
-# 'medium': {'postCount': 464993, 'compound': 0.07822665545503248},
-# 'low': {'postCount': 91562, 'compound': 0.1513315469299454}}
-
-
-    createCoRelPlot( [19346, 91562, 464993, 313159, 263467], [0.16979695027395791, 0.1513315469299454, 0.07822665545503248, 0.035213245028882706, -0.030325970614915106], filename = 'sentiRange.jpg', xlabel = 'Range', ylabel = 'Compound Sentiments', step = 1.0 )
+    # createCoRelPlot( userPostsList, sentiUsersList, filename = 'sentiUserPosts.jpg', xlabel = 'Range', ylabel = 'Compound Sentiments', step = 1.0 )
 
 
 # 
 # 
 # Functions END-------
 
-wcNext = [('Events', 1), ('Local and Regional', 1), ('Lounge', 1), ('Opposing Views Forum', 1), ('Politics & Continuing Crises')]
-wcNextContent = getContentsByCategory( wcNext )
-wordCount( wcNextContent, mostCommon = 500 )
+# wcNext = [('Events', 1), ('Local and Regional', 1), ('Lounge', 1), ('Opposing Views Forum', 1), ('Politics & Continuing Crises')]
+# wcNextContent = getContentsByCategory( wcNext )
+# wordCount( wcNextContent, mostCommon = 500 )
 
 # politicalRegimesContent = getContentsByCategory( politicalRegimes )
 # getSentimentsFromDict(politicalRegimesContent, filename = 'SentimentsForPoliticalRegimes.txt')
@@ -1081,6 +1192,7 @@ wordCount( wcNextContent, mostCommon = 500 )
 
 # makeWordCloud(include = ['For Stormfront Ladies Only'])
 # makeWordCloud(exclude = ['For Stormfront Ladies Only'])
+# makeWordCloud(exclude = ['For Stormfront Ladies Only', 'Stormfront en Francais', 'Stormfront en Espanol y Portugues', 'Stormfront Russia', 'Stormfront Baltic / Scandinavia', 'Stormfront Europe', 'Stormfront Italia', 'Stormfront Srbija', 'Stormfront Canada', 'Stormfront Croatia', 'Stormfront Hungary', 'Stormfront South Africa', 'Stormfront Nederland & Vlaanderen'], filename= 'results/NoCountryCloud.jpg')
 
 # getDataByUser()
 
@@ -1098,7 +1210,90 @@ wordCount( wcNextContent, mostCommon = 500 )
 #         makeWordCloud( data = loadedWC, filename = 'wcLadies.jpg' )
 
 
+
+# with open(allCategoriesSentiments) as f:
+#     allComp = []
+#     for line in f:
+#         loadedCat = json.loads(line)
+#         for key, value in loadedCat.iteritems():
+#             if key != 'For Stormfront Ladies Only':
+#                 allComp.append(value['compound'])
+#         print py_.mean(allComp)
+#         print loadedCat['For Stormfront Ladies Only']['compound']
+
+
+wcWords = {}
+exclList = ["n't", "'d", "'s", "'m", "'ve", "'re", "'", "&", "|", "#", ";", "+","http"]
+for cat in wcLadiesCat:
+
+    with open('results/'+cat) as f:
+        for line in f:
+            wcss = json.loads(line)
+            for w, count in wcss.iteritems():
+                if w not in exclList:
+                    if not w in wcWords:
+                        wcWords[w] = int(count)
+                    else:
+                        wcWords[w] = wcWords[w] + count
+# wcWords = sorted(wcWords.items(), key=operator.itemgetter(1), reverse=True)
+# wcWords = np.array(wcWords)
+wcWords = WordCloud().generate_from_frequencies( wcWords )
+wcWords.to_file('wcLadiesOnly.jpg')
+
 # getSentimentsFromDictToJson( userPostsRange(1, 10, 200, 800), filename = 'SentimentsFromRange.json' )
 # doPlotFromTimeline()
 # doPlotFromUsersRange()
 # userPostsRange(1, 10, 200, 800)
+
+def getSeasonalityGeneralPopul():
+
+    winterSentiments = []
+    springSentiments = []
+    summerSentiments = []
+    autumnSentiments = []
+    userSentiments = []
+    okUsers = {}
+
+    with open('results/timelineData.json') as f:
+        for line in f:
+            data = json.loads(line)
+            for year, values in data.iteritems():
+                if year != '2001' and year != '2015':
+                    for month, monData in data[year].iteritems():
+                        if month == '12' or month == '01' or month == '02':
+                            winterSentiments.append(monData['monthlySentiments']['compound'])
+                        if month == '03' or month == '04' or month == '05':
+                            springSentiments.append(monData['monthlySentiments']['compound'])
+                        if month == '06' or month == '07' or month == '08':
+                            summerSentiments.append(monData['monthlySentiments']['compound'])
+                        if month == '09' or month == '10' or month == '11':
+                            autumnSentiments.append(monData['monthlySentiments']['compound'])
+
+    with open('results/SentimentsFromAllUsers.json') as f:
+        for line in f:
+            allUsers = json.loads(line)
+            
+            for user, sentis in allUsers.iteritems():
+                if sentis:
+                    okUsers[user] = sentis
+                        
+            rUsers = random.sample( okUsers.items(), 39 )
+            for u, value in rUsers:
+                userSentiments.append(value['compound'])
+
+    # print len(winterSentiments)
+    # print len(springSentiments)
+    # print len(summerSentiments)
+    # print len(autumnSentiments)
+
+    print np.corrcoef( userSentiments, winterSentiments )
+    print np.corrcoef( userSentiments, springSentiments )
+    print np.corrcoef( userSentiments, summerSentiments )
+    print np.corrcoef( userSentiments, autumnSentiments )
+
+
+
+# getSeasonalityGeneralPopul()
+
+# getTimelineContents()
+# doTFIDF()
