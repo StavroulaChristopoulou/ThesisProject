@@ -36,6 +36,8 @@ userPosts = 'results/AllUsers.txt'
 userContents = 'results/userContentData.json'
 timelineData = 'results/timelineData.json'
 timelineContents = 'results/timelineContents.json'
+categoryContents = 'results/categoryContents.json'
+categoryTfIdf = 'results/categoryTfIdf.json'
 sentiRange = 'results/SentimentsFromRange.json'
 sentiUsers = 'results/SentimentsFromAllUsers.json'
 # Import word counts
@@ -109,6 +111,31 @@ def doTFIDF():
                         word = "\tWord: {}, TF-IDF: {}".format(word, round(score, 5))
                         writeToFile( 'TfIdf.txt', word)
                         print("\tWord: {}, TF-IDF: {}".format(word, round(score, 5)))
+
+    print 'Finished...'
+
+def doTFIDFbyCategory():
+    print 'Starting doTFIDFbyCategory'
+    dict = {}
+    txt = ''
+    with open(categoryContents) as f:
+        for line in f:
+            data = json.loads(line)
+            for category, contents in data.iteritems():
+                if not category in dict:
+                    dict[category] = {}
+                for content in contents:
+                    txt = content + ' '
+                blob = tb(txt)
+                bloblist = [blob]
+                scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+                sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                for word, score in sorted_words[:500]:
+                    dict[category][word] = score
+
+    with open('results/categoryTfIdf.json', 'w') as outfile:
+        json.dump(dict, outfile)
+
 
     print 'Finished...'
 
@@ -241,8 +268,9 @@ def getAllEntities():
             entity = json.loads(line)
             if entity['stormfront_entities']:
                 for item in entity['stormfront_entities']:
+                    item = unicodedata.normalize('NFKD', unicode(item)).encode('ascii', 'ignore')
                     if not item in entList:
-                        entList.append( unicodedata.normalize('NFKD', unicode(item)).encode('ascii', 'ignore') )
+                        entList.append( item )
         
     print 'Finished...'
     return entList
@@ -586,7 +614,7 @@ def getContentsByYearAndMonthFromCategory( category ):
    
 # Get contents from a given list of categories
 # 
-def getContentsByCategory( categories ):
+def getContentsByCategory( categories, save = False, filename = False ):
     print 'Starting: getContentsByCategory'
 
     dict = {}
@@ -605,6 +633,12 @@ def getContentsByCategory( categories ):
                     dict[entity['stormfront_category']] = []
                 if content:
                     dict[entity['stormfront_category']].append( content )
+
+
+    if save and filename: 
+        filename = 'results/' +filename +'.json'
+        with open(filename, 'w') as outfile:
+            json.dump(dict, outfile)
 
     print 'Finished...'
 
@@ -944,6 +978,34 @@ def getTimelineContents():
     # return dict
 
 
+def getCategoryContents():
+    print 'Starting: getCategoryContents'
+
+    dict = {}
+
+    with open(entities) as f:
+        
+        for line in f:
+            entity = json.loads(line)
+            category = entity['stormfront_category']
+            content = basicCleanUp( entity['stormfront_content'] )
+
+            if not category in dict:
+                dict[category] = []
+
+            if content:
+                dict[category].append( content )
+
+    print 'Finished...'
+
+
+    with open('results/categoryContents.json', 'w') as outfile:
+        json.dump(dict, outfile)
+
+    print dict
+    # return dict
+
+
 
 def makeWordCloud( data = False, include = False, exclude = False, filename = False ):
     print 'Starting: makeWordCloud'
@@ -1145,6 +1207,84 @@ def doPlotFromUsersRange():
     # createCoRelPlot( userPostsList, sentiUsersList, filename = 'sentiUserPosts.jpg', xlabel = 'Range', ylabel = 'Compound Sentiments', step = 1.0 )
 
 
+
+
+
+def getSeasonSentiments():
+    dict = {}
+    winterData = []
+    springData = []
+    summerData = []
+    autumnData = []
+    with open(timelineData) as f:
+        for line in f:
+            data = json.loads(line)
+            for year, values in data.iteritems():
+                if year not in dict:
+                    dict[year] = {}
+                for month in data[year]:
+                    if month != 'yearlyTotalPosts' and month != 'yearlySentiments':
+                        compound = data[year][month]['monthlySentiments']['compound']
+                        if month == '12' or month == '01' or month == '02':
+                            winterData.append(compound)
+                        elif month == '03' or month == '04' or month == '05':
+                            springData.append(compound)
+                        elif month == '06' or month == '07' or month == '08':
+                            summerData.append(compound)
+                        else:
+                            autumnData.append(compound)
+                if winterData:
+                    dict[year]['winter'] = py_.mean(winterData)
+                if springData:
+                    dict[year]['spring'] = py_.mean(springData)
+                if summerData:
+                    dict[year]['summer'] = py_.mean(summerData)
+                if autumnData:
+                    dict[year]['autumn'] = py_.mean(autumnData)
+                    
+                winterData = []
+                springData = []
+                summerData = []
+                autumnData = []
+
+    print dict
+
+
+    # dates = []
+    # sents = []
+
+    # for date, sent in dict:
+    #     dates.append( int(date) )
+    #     sents.append( float(sent) )
+
+
+
+
+
+
+
+
+def doCorrelationMonthlySentsAndPosts():
+    comps = []
+    tps = []
+    with open(timelineData) as f:
+        for line in f:
+            data = json.loads(line)
+            for year, values in data.iteritems():
+                for month in data[year]:
+                    if month != 'yearlyTotalPosts' and month != 'yearlySentiments':
+                        compound = data[year][month]['monthlySentiments']['compound']
+                        totalPosts = data[year][month]['monthlyTotalPosts']
+
+                    comps.append(compound)
+                    tps.append(totalPosts)
+
+            print np.corrcoef( tps, comps )
+            createCoRelPlot( tps, comps, 'CorrelationMonthlySentsToPosts.jpg', 'Total Posts per month', 'Monthly Sentiment', step = 3000.0 )
+
+
+#doCorrelationMonthlySentsAndPosts()
+
 # 
 # 
 # Functions END-------
@@ -1222,23 +1362,54 @@ def doPlotFromUsersRange():
 #         print loadedCat['For Stormfront Ladies Only']['compound']
 
 
-wcWords = {}
-exclList = ["n't", "'d", "'s", "'m", "'ve", "'re", "'", "&", "|", "#", ";", "+","http"]
-for cat in wcLadiesCat:
+# wcWords = {}
+# exclList = ["n't", "'d", "'s", "'m", "'ve", "'re", "'", "&", "|", "#", ";", "+","http"]
+# for cat in wcLadiesCat:
 
-    with open('results/'+cat) as f:
-        for line in f:
-            wcss = json.loads(line)
-            for w, count in wcss.iteritems():
-                if w not in exclList:
-                    if not w in wcWords:
-                        wcWords[w] = int(count)
-                    else:
-                        wcWords[w] = wcWords[w] + count
+#     with open('results/'+cat) as f:
+#         for line in f:
+#             wcss = json.loads(line)
+#             for w, count in wcss.iteritems():
+#                 if w not in exclList:
+#                     if not w in wcWords:
+#                         wcWords[w] = int(count)
+#                     else:
+#                         wcWords[w] = wcWords[w] + count
 # wcWords = sorted(wcWords.items(), key=operator.itemgetter(1), reverse=True)
 # wcWords = np.array(wcWords)
-wcWords = WordCloud().generate_from_frequencies( wcWords )
-wcWords.to_file('wcLadiesOnly.jpg')
+# wcWords = WordCloud().generate_from_frequencies( wcWords )
+# wcWords.to_file('wcLadiesOnly.jpg')
+
+# with open(categoryTfIdf) as f:
+#     emptySpace = re.compile('\ ')
+#     forwardSlash = re.compile('\/')
+#     for line in f:
+#         categoriesTfIdfs = json.loads(line)
+#         for catTfIdf, words in categoriesTfIdfs.iteritems():
+#             print catTfIdf
+#             catDict = {}
+#             for w, tfidf in words.iteritems():
+#                 if w not in exclList:
+#                     catDict[w] = tfidf
+#                     # tfidf = repr(tfidf)
+#                     # weight = tfidf.split('.')[1]
+#             # print catDict
+
+#             catTfIdf = emptySpace.sub('_', catTfIdf )
+#             catTfIdf = forwardSlash.sub('', catTfIdf )
+#             # catDict = sorted(catDict.items(), key=operator.itemgetter(1), reverse=True)
+#             # catDict = np.array(catDict)
+#             catDict = WordCloud().generate_from_frequencies( catDict )
+#             catDict.to_file('results/'+catTfIdf+ '.jpg')
+
+
+
+
+
+
+# getSeasonSentiments()
+
+
 
 # getSentimentsFromDictToJson( userPostsRange(1, 10, 200, 800), filename = 'SentimentsFromRange.json' )
 # doPlotFromTimeline()
@@ -1291,9 +1462,50 @@ def getSeasonalityGeneralPopul():
     print np.corrcoef( userSentiments, summerSentiments )
     print np.corrcoef( userSentiments, autumnSentiments )
 
+#
+
+
+def getSentAveragePerEntity():
+    theEntities = getAllEntities()
+
+    dict = {}
+    entCompounds = {}
+
+    for ent in theEntities:
+        dict[ent] = []
+
+    with open(entities) as f:
+        for line in f:
+            post = json.loads(line)
+            postEntities = post['stormfront_entities']
+            postContent  = basicCleanUp( post['stormfront_content'] )
+            if postEntities:
+                for pe in postEntities:
+                    pe = unicodedata.normalize('NFKD', unicode(pe)).encode('ascii', 'ignore')
+                    if postContent:
+                        dict[pe].append(postContent)
+
+    sentEnti = getSentimentsFromDictToJson(dict)
+
+    for ent, sents in sentEnti.iteritems():
+        for key, sent in sents.iteritems():
+            if key == 'compound':
+                entCompounds[ent] = sent
+    entCompounds = sorted(entCompounds.items(), key=operator.itemgetter(1), reverse=False)
+    print entCompounds
+    entCompounds = repr(entCompounds)
+    writeToFile( 'SortedEntityCompounds.txt', entCompounds )
+
+getSentAveragePerEntity()
+
 
 
 # getSeasonalityGeneralPopul()
 
 # getTimelineContents()
 # doTFIDF()
+
+# getContentsByCategory( ['For Stormfront Ladies Only'], save = True, filename = 'LadiesContent' )
+# getContentsByCategory( ['Dating Advice'], save = True, filename = 'DatingAdviceContent' )
+# getCategoryContents()
+# doTFIDFbyCategory()
