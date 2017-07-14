@@ -17,8 +17,11 @@ import numpy as np
 import random
 import math
 from textblob import TextBlob as tb
+from collections import Counter
+
 
 # For word count
+from string import punctuation
 from nltk.tokenize import word_tokenize, wordpunct_tokenize, sent_tokenize
 from nltk.corpus import stopwords
 
@@ -50,10 +53,10 @@ wcLadiesCat = ['For_Stormfront_Ladies_Only-WordCount.json']
 
 
 
-
 # Constants
 punchMarks = [".", ",", "''", "``", "...", ":", "(", ")", "{", "}", "[", "]", "?"]
 stopWords = set(stopwords.words('english'))
+stop_words = stopwords.words('english') + list(punctuation)
 
 
 stop = set(STOPWORDS)
@@ -67,12 +70,19 @@ stop.add("ext")
 #[('Opposing Views Forum', 813550), ('Politics & Continuing Crises', 166120), ('Lounge', 128560), ('Stormfront en Francais', 115393), ('Talk', 82808), ('Stormfront en Espanol y Portugues', 69502), ('Stormfront Russia', 62106), ('Questions about this Board', 59803), ('Stormfront Ireland', 51372), ('For Stormfront Ladies Only', 50098), ('Events', 45920), ('Local and Regional', 45715), ('Strategy and Tactics', 43944), ('Stormfront Baltic / Scandinavia', 41367), ('Ideology and Philosophy', 37159), ('Suggestions for this Board', 28289), ('Stormfront Europe', 28191), ('Stormfront Britain', 21551), ('Classified Ads', 19392), ('Newslinks & Articles', 18752), ('New Members Introduce Yourselves', 14722), ('eActivism and Stormfront Webmasters', 14661), ('Multimedia', 14598), ('Legal Issues', 12838), ('Stormfront Italia', 11991), ('Stormfront Srbija', 8208), ('Stormfront Canada', 4658), ('General Questions and Comments', 3940), ('The Truth About Martin Luther King', 3930), ('Stormfront Croatia', 3625), ('Stormfront Hungary', 3416), ('Stormfront South Africa', 3106), ('The Eternal Flame', 2604), ('Dating Advice', 1097), ('Announcements', 245), ('Introduction and FAQ', 236), ('Stormfront Nederland & Vlaanderen', 126), ('Fourth Annual Stormfront Smoky Mountain  Summit', 64), ('Stormfront Downunder', 48)]
 # cwc = [('General Questions and Comments', 37159), ('Legal Issues', 37159), ('Multimedia', 37159), ('eActivism and Stormfront Webmasters', 37159), ('Classified Ads', 37159) ] 
 
-wcc = [('For Stormfront Ladies Only', 353), ('Guidelines for Posting', 123), ('General Questions and Comments', 123), ('Fourth Annual Stormfront Smoky Mountain  Summit', 123), ('eActivism and Stormfront Webmasters', 123)]
+# wcc = [('For Stormfront Ladies Only', 353), ('Guidelines for Posting', 123), ('General Questions and Comments', 123), ('Fourth Annual Stormfront Smoky Mountain  Summit', 123), ('eActivism and Stormfront Webmasters', 123)]
 
 
 # Functions START -----
 # 
 # 
+
+def tokenize(text):
+    print 'Tokenizing...'
+    words = word_tokenize(text)
+    words = [w.lower() for w in words]
+    return [w for w in words if w not in stop_words and not w.isdigit()]
+
 
 
 # TF-IDF
@@ -98,11 +108,15 @@ def doTFIDF():
             data = json.loads(line)
             for year, values in data.iteritems():
                 for month, contents in data[year].iteritems():
+                    txt = ''
                     title = "Top words in " + year + "-" + month
                     writeToFile( 'TfIdf.txt', title)
                     print("Top words in " + year+ "-" + month)
                     for content in contents:
-                        txt = content + ' '
+                        txt += content + ' '
+                    txt = tokenize(txt)
+                    txt = ' '.join(txt)
+                    print txt
                     blob = tb(txt)
                     bloblist = [blob]
                     scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
@@ -116,22 +130,26 @@ def doTFIDF():
 
 def doTFIDFbyCategory():
     print 'Starting doTFIDFbyCategory'
+    cats = ['For Stormfront Ladies Only', 'Dating Advice']
     dict = {}
     txt = ''
     with open(categoryContents) as f:
         for line in f:
             data = json.loads(line)
             for category, contents in data.iteritems():
-                if not category in dict:
-                    dict[category] = {}
-                for content in contents:
-                    txt = content + ' '
-                blob = tb(txt)
-                bloblist = [blob]
-                scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
-                sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-                for word, score in sorted_words[:500]:
-                    dict[category][word] = score
+                if category in cats:
+                    if not category in dict:
+                        dict[category] = {}
+                    for content in contents:
+                        txt += content + ' '
+                    txt = tokenize(txt)
+                    txt = ' '.join(txt)
+                    blob = tb(txt)
+                    bloblist = [blob]
+                    scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+                    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                    for word, score in sorted_words[:500]:
+                        dict[category][word] = score
 
     with open('results/categoryTfIdf.json', 'w') as outfile:
         json.dump(dict, outfile)
@@ -1496,7 +1514,7 @@ def getSentAveragePerEntity():
     entCompounds = repr(entCompounds)
     writeToFile( 'SortedEntityCompounds.txt', entCompounds )
 
-getSentAveragePerEntity()
+# getSentAveragePerEntity()
 
 
 
@@ -1508,4 +1526,4 @@ getSentAveragePerEntity()
 # getContentsByCategory( ['For Stormfront Ladies Only'], save = True, filename = 'LadiesContent' )
 # getContentsByCategory( ['Dating Advice'], save = True, filename = 'DatingAdviceContent' )
 # getCategoryContents()
-# doTFIDFbyCategory()
+doTFIDFbyCategory()
