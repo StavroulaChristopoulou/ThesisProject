@@ -50,11 +50,16 @@ allCategoriesSentiments = 'results/SentimentsFor-39-MostActiveCategories.json'
 wcCat = ['500-MostCommonWords.json', 'Announcements-WordCount.json', 'Classified_Ads-WordCount.json', 'Dating_Advice-WordCount.json', 'eActivism_and_Stormfront_Webmasters-WordCount.json', 'Fourth_Annual_Stormfront_Smoky_Mountain__Summit-WordCount.json', 'General_Questions_and_Comments-WordCount.json', 'Guidelines_for_Posting-WordCount.json', 'Ideology_and_Philosophy-WordCount.json', 'Introduction_and_FAQ-WordCount.json', 'Legal_Issues-WordCount.json', 'Multimedia-WordCount.json', 'New_Members_Introduce_Yourselves-WordCount.json', 'Newslinks_&_Articles-WordCount.json', 'The_Eternal_Flame-WordCount.json', 'The_Truth_About_Martin_Luther_King-WordCount.json']
 wcLadiesCat = ['For_Stormfront_Ladies_Only-WordCount.json']
 
+dating_advice_wordcount = 'results/dating_advice_wordcount.json'
+for_stormfront_ladies_only_wordcount = 'results/for_stormfront_ladies_only_wordcount.json'
+
+tfidfDatingAdvice = 'results/tfidfDatingAdvice.json'
+
 
 
 
 # Constants
-punchMarks = [".", ",", "''", "``", "...", ":", "(", ")", "{", "}", "[", "]", "?"]
+punchMarks = [".", ",", "''", "``", "...", ":", "(", ")", "{", "}", "[", "]", "?", "'s", "'m", "'ve", "n't"]
 stopWords = set(stopwords.words('english'))
 stop_words = stopwords.words('english') + list(punctuation)
 
@@ -81,7 +86,7 @@ def tokenize(text):
     print 'Tokenizing...'
     words = word_tokenize(text)
     words = [w.lower() for w in words]
-    return [w for w in words if w not in stop_words and not w.isdigit()]
+    return [w for w in words if w not in stop_words and not w.isdigit() and not w in punchMarks]
 
 
 
@@ -94,7 +99,7 @@ def n_containing(word, bloblist):
     return sum(1 for blob in bloblist if word in blob.words)
 
 def idf(word, bloblist):
-    return math.log(len(bloblist) / (1 + n_containing(word, bloblist)))
+    return math.log(len(bloblist) / (1 + n_containing(word, bloblist))) 
 
 def tfidf(word, blob, bloblist):
     return tf(word, blob) * idf(word, bloblist)
@@ -132,24 +137,36 @@ def doTFIDFbyCategory():
     print 'Starting doTFIDFbyCategory'
     cats = ['For Stormfront Ladies Only', 'Dating Advice']
     dict = {}
-    txt = ''
+    allCats = {}
+    bloblist = []
     with open(categoryContents) as f:
         for line in f:
             data = json.loads(line)
             for category, contents in data.iteritems():
-                if category in cats:
-                    if not category in dict:
-                        dict[category] = {}
-                    for content in contents:
-                        txt += content + ' '
-                    txt = tokenize(txt)
-                    txt = ' '.join(txt)
-                    blob = tb(txt)
-                    bloblist = [blob]
-                    scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
-                    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-                    for word, score in sorted_words[:500]:
-                        dict[category][word] = score
+                if not category in allCats:
+                    print 'Adding "' +category+'" in the dictionary joining its content'
+                    catContent = ' '.join(contents)
+                    allCats[category] = catContent
+                    print 'Start bloblist addition'
+                    bloblist.append( tb(catContent) )
+                    print 'Finished "' + category + '" : Categories finished so far: ' + repr(len(bloblist))
+
+    for cat, conts in allCats.iteritems():
+        print 'Getting allCats...'
+        if cat in cats:
+            blob = tb(conts)
+            print 'Finished blob from "' + cat + '"'
+            print 'Starting tfidf scoring'
+            scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+            print 'Finished tfidf scoring'
+            sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            if not cat in dict:
+                dict[cat] = {}
+            for word, score in sorted_words[:500]:
+                dict[category][word] = score
+
+    print 'Finished All Tfidf'
+    print 'Start writing file...'
 
     with open('results/categoryTfIdf.json', 'w') as outfile:
         json.dump(dict, outfile)
@@ -158,13 +175,94 @@ def doTFIDFbyCategory():
     print 'Finished...'
 
 
+def doTfidfDatingAdvice():
+    print 'Starting doTfidfDatingAdvice'
+    txt = ''
+    dict = {}
+    with open(dating_advice_wordcount) as f:
+        for line in f:
+            data = json.loads(line)
+            for word, wordCount in data.iteritems():
+                c = 1
+                for i in xrange(wordCount):
+                    txt += word + ' '
+
+    blob = tb(txt)
+    bloblist = [blob]
+    scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+    for word, score in sorted_words[:500]:
+        dict[word] = score
+
+    with open('results/tfidfDatingAdvice.json', 'w') as outfile:
+        json.dump(dict, outfile)
+
+    print 'Finished...'
+
+def doTfidfLadies():
+    print 'Starting doTfidfLadies'
+    dict = {}
+    txt = ''
+    with open(for_stormfront_ladies_only_wordcount) as f:
+        for line in f:
+            data = json.loads(line)
+            for word, wordCount in data.iteritems():
+                c = 1
+                for i in xrange(wordCount):
+                    txt += word + ' '
+
+    blob = tb(txt)
+    bloblist = [blob]
+    scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+    for word, score in sorted_words[:500]:
+        dict[word] = score
+
+    with open('results/tfidfLadies.json', 'w') as outfile:
+        json.dump(dict, outfile)
+
+    print 'Finished...'
+
+
+
+def countAllWords():
+    print 'Starting countAllWords'
+    cats = ['For Stormfront Ladies Only', 'Dating Advice']
+    emptySpace = re.compile('\ ')
+    with open(categoryContents) as f:
+        for line in f:
+            data = json.loads(line)
+            for category, contents in data.iteritems():
+                dict = {}
+                if category in cats:
+                    for cont in contents:
+                        tokensPerPost = tokenize(cont)
+                        for tpp in tokensPerPost:
+                            if not tpp in dict:
+                                dict[tpp] = 1
+                            else:
+                                dict[tpp] +=1
+
+                    # allWords = sorted(dict.items(), key=operator.itemgetter(1), reverse=True)
+
+                    keyCat = emptySpace.sub('_', category ) + '_wordcount'
+                    keyCat = keyCat.lower()
+
+                    with open('results/'+keyCat+'.json', 'w') as outfile:
+                        json.dump(dict, outfile)
+
+
+
+
 
 # Word Count from a given dictionary without the stop-words
 # 
 def wordCount( posts, mostCommon = False, filename = False ):
     print 'Starting: wordCount'
 
-    postsDict = {}
+    postsDict = {}  
     words = []
 
     for key, posts in posts.iteritems():
@@ -1420,7 +1518,13 @@ def doCorrelationMonthlySentsAndPosts():
 #             catDict = WordCloud().generate_from_frequencies( catDict )
 #             catDict.to_file('results/'+catTfIdf+ '.jpg')
 
-
+# with open(tfidfDatingAdvice) as f:
+#     for line in f:
+#         words = json.loads(line)
+#         for word, tfValue in words.iteritems():
+#             print word
+#             # print tfValue
+#             print float(tfValue)
 
 
 
@@ -1527,3 +1631,5 @@ def getSentAveragePerEntity():
 # getContentsByCategory( ['Dating Advice'], save = True, filename = 'DatingAdviceContent' )
 # getCategoryContents()
 doTFIDFbyCategory()
+# doTfidfDatingAdvice()
+# doTfidfLadies()
