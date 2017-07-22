@@ -35,11 +35,12 @@ sys.setdefaultencoding('latin-1')
 # Import files
 entities = '/var/scratch/schristo/data/201607_vox-pol_jonathan/stormfront_replies_entities.jsons'
 # entities = 'stormfront_replies_entitie.jsons'
+results = '/var/scratch/schristo/results/'
 userPosts = 'results/AllUsers.txt'
 userContents = 'results/userContentData.json'
 timelineData = 'results/timelineData.json'
 timelineContents = 'results/timelineContents.json'
-categoryContents = 'results/categoryContents.json'
+categoryContents = results+ 'categoryContents.json'
 categoryTfIdf = 'results/categoryTfIdf.json'
 sentiRange = 'results/SentimentsFromRange.json'
 sentiUsers = 'results/SentimentsFromAllUsers.json'
@@ -54,7 +55,6 @@ dating_advice_wordcount = 'results/dating_advice_wordcount.json'
 for_stormfront_ladies_only_wordcount = 'results/for_stormfront_ladies_only_wordcount.json'
 
 tfidfDatingAdvice = 'results/tfidfDatingAdvice.json'
-
 
 
 
@@ -93,15 +93,19 @@ def tokenize(text):
 # TF-IDF
 # 
 def tf(word, blob):
+    print 'tf...'
     return blob.words.count(word) / len(blob.words)
 
 def n_containing(word, bloblist):
+    print 'n_containing...'
     return sum(1 for blob in bloblist if word in blob.words)
 
 def idf(word, bloblist):
+    print 'idf...'
     return math.log(len(bloblist) / (1 + n_containing(word, bloblist))) 
 
 def tfidf(word, blob, bloblist):
+    print 'tfidf...'
     return tf(word, blob) * idf(word, bloblist)
 
 def doTFIDF():
@@ -168,60 +172,9 @@ def doTFIDFbyCategory():
     print 'Finished All Tfidf'
     print 'Start writing file...'
 
-    with open('results/categoryTfIdf.json', 'w') as outfile:
+    with open(results +'categoryTfIdf.json', 'w') as outfile:
         json.dump(dict, outfile)
 
-
-    print 'Finished...'
-
-
-def doTfidfDatingAdvice():
-    print 'Starting doTfidfDatingAdvice'
-    txt = ''
-    dict = {}
-    with open(dating_advice_wordcount) as f:
-        for line in f:
-            data = json.loads(line)
-            for word, wordCount in data.iteritems():
-                c = 1
-                for i in xrange(wordCount):
-                    txt += word + ' '
-
-    blob = tb(txt)
-    bloblist = [blob]
-    scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
-    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-
-    for word, score in sorted_words[:500]:
-        dict[word] = score
-
-    with open('results/tfidfDatingAdvice.json', 'w') as outfile:
-        json.dump(dict, outfile)
-
-    print 'Finished...'
-
-def doTfidfLadies():
-    print 'Starting doTfidfLadies'
-    dict = {}
-    txt = ''
-    with open(for_stormfront_ladies_only_wordcount) as f:
-        for line in f:
-            data = json.loads(line)
-            for word, wordCount in data.iteritems():
-                c = 1
-                for i in xrange(wordCount):
-                    txt += word + ' '
-
-    blob = tb(txt)
-    bloblist = [blob]
-    scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
-    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-
-    for word, score in sorted_words[:500]:
-        dict[word] = score
-
-    with open('results/tfidfLadies.json', 'w') as outfile:
-        json.dump(dict, outfile)
 
     print 'Finished...'
 
@@ -1631,5 +1584,3 @@ def getSentAveragePerEntity():
 # getContentsByCategory( ['Dating Advice'], save = True, filename = 'DatingAdviceContent' )
 # getCategoryContents()
 doTFIDFbyCategory()
-# doTfidfDatingAdvice()
-# doTfidfLadies()
